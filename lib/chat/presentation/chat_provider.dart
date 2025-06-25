@@ -1,20 +1,23 @@
 import 'package:ai_chat_bot/chat/data/gemini_api_service.dart';
 import 'package:ai_chat_bot/model/message.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ChatProvider with ChangeNotifier {
-  // Gemini api service
-  final _apiService = GeminiApiService(apiKey: 'AIzaSyB10W4HKWGXrg4y5_N-HTKjgRU9jEYdahM');
+  // Gemini API service initialized with key from .env
+  late final GeminiApiService _apiService;
 
-  // Messages and loading...
+  ChatProvider() {
+    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+    _apiService = GeminiApiService(apiKey: apiKey);
+  }
+
   final List<Message> _messages = [];
   bool _isLoading = false;
 
-  // Getters
   List<Message> get messages => _messages;
   bool get isLoading => _isLoading;
 
-  // Send message to Gemini API
   Future<void> sendMessage(String content) async {
     if (content.trim().isEmpty) return;
 
@@ -51,7 +54,6 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // ✅ New method: clear all messages
   void clearMessages() {
     _messages.clear();
     notifyListeners();

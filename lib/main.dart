@@ -1,13 +1,20 @@
 import 'package:ai_chat_bot/chat/presentation/chat_page.dart';
 import 'package:ai_chat_bot/chat/presentation/chat_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'dart:io';
 
-void main() {
-  runApp(ChangeNotifierProvider(
-    create: (context) => ChatProvider(),
-    child: const MyApp(),
-  ));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    print('Looking for .env at: ${File('.env').absolute.path}');
+    await dotenv.load(fileName: '.env');
+    print('Successfully loaded .env file');
+  } catch (e) {
+    print('Error loading .env: $e');
+  }
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -15,9 +22,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: ChatPage(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ChatProvider()),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: ChatPage(),
+      ),
     );
   }
 }
