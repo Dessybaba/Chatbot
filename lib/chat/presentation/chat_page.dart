@@ -96,9 +96,19 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
           ],
         ),
         actions: [
-          IconButton(
+          PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.white),
-            onPressed: () {},
+            onSelected: (value) {
+              if (value == 'new_chat') {
+                context.read<ChatProvider>().clearMessages();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'new_chat',
+                child: Text('New Chat'),
+              ),
+            ],
           ),
         ],
       ),
@@ -106,7 +116,6 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
         opacity: _fadeAnimation,
         child: Column(
           children: [
-            // TOP SECTION: Chat messages
             Expanded(
               child: Consumer<ChatProvider>(
                 builder: (context, chatProvider, child) {
@@ -114,7 +123,6 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
                     _scrollToBottom();
                   });
 
-                  // empty state
                   if (chatProvider.messages.isEmpty) {
                     return Center(
                       child: Column(
@@ -166,7 +174,6 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
                     );
                   }
 
-                  // chat messages using your ChatBubble widget
                   return ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(16),
@@ -185,8 +192,6 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
                 },
               ),
             ),
-
-            // Loading indicator
             Consumer<ChatProvider>(
               builder: (context, chatProvider, child) {
                 if (chatProvider.isLoading) {
@@ -257,8 +262,6 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
                 return const SizedBox();
               },
             ),
-
-            // USER INPUT BOX
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
