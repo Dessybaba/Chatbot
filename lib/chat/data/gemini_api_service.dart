@@ -1,78 +1,109 @@
 import 'dart:convert';
-
 import 'package:http/http.dart' as http;
 
-/*
-
-Service class to handle all Gemini API stuff...
-
-*/
-
 class GeminiApiService {
-  //  API Constants
-  static const String baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-  static const int _maxTokens = 1024;
+  static const String baseUrl =
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  static const int maxTokens = 2048;
+  static const Duration timeout = Duration(seconds: 30);
 
-  // Store the API key securely
   final String _apiKey;
 
-  // Require API key
-  GeminiApiService({required String apiKey}) : _apiKey = apiKey;
-
-  /*
-
-  Send a message to Gemini API and get the response.
-
-  */
-
-  Future<String> sendMessage(String message) async {
-    try {
-      // Make POST request to Gemini API
-      final response = await http.post(
-        Uri.parse('$baseUrl?key=$_apiKey'),
-        headers: _getHeaders(),
-        body: _getRequestBody(message),
-      );
-
-      // Check if request was successful
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
-        
-        // Extract the content from Gemini's response
-        if (responseData['candidates'] != null && 
-            responseData['candidates'].isNotEmpty &&
-            responseData['candidates'][0]['content'] != null &&
-            responseData['candidates'][0]['content']['parts'] != null &&
-            responseData['candidates'][0]['content']['parts'].isNotEmpty) {
-          return responseData['candidates'][0]['content']['parts'][0]['text'] ?? 'No response content';
-        } else {
-          return 'Empty response from Gemini';
-        }
-      } else {
-        throw Exception('API request failed with status: ${response.statusCode}, body: ${response.body}');
-      }
-    } catch (e) {
-      throw Exception('Error sending message to Gemini: $e');
+  GeminiApiService({required String apiKey}) : _apiKey = apiKey {
+    if (_apiKey.isEmpty) {
+      throw Exception('API key cannot be empty');
     }
   }
 
-  // create required headers for Gemini API
+  /// Send a message with full conversation context
+  Future<String> sendMessage(
+      String message, List<Map<String, dynamic>> conversationHistory) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl?key=$_apiKey'),
+            headers: _getHeaders(),
+            body: _getRequestBody(message, conversationHistory),
+          )
+          .timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        return _extractResponse(responseData);
+      } else {
+        throw _handleErrorResponse(response);
+      }
+    } on http.ClientException catch (e) {
+      throw Exception(
+          'Network error: Please check your internet connection. $e');
+    } catch (e) {
+      if (e.toString().contains('SocketException')) {
+        throw Exception('Failed host lookup: Check your internet connection');
+      }
+      rethrow;
+    }
+  }
+
   Map<String, String> _getHeaders() => {
         'Content-Type': 'application/json',
       };
 
-  // format the request body for Gemini API specs
-  String _getRequestBody(String content) => jsonEncode({
-        'contents': [
-          {
-            'parts': [
-              {'text': content}
-            ]
-          }
-        ],
-        'generationConfig': {
-          'maxOutputTokens': _maxTokens,
-          'temperature': 0.7,
+  String _getRequestBody(String message, List<Map<String, dynamic>> history) {
+    // Build conversation with history
+    final contents = [
+      ...history,
+      {
+        'role': 'user',
+        'parts': [
+          {'text': message}
+        ]
+      }
+    ];
+
+    return jsonEncode({
+      'contents': contents,
+      'generationConfig': {
+        'maxOutputTokens': maxTokens,
+        'temperature': 0.9,
+        'topP': 1,
+        'topK': 40,
+      },
+      'safetySettings': [
+        {
+          'category': 'HARM_CATEGORY_HARASSMENT',
+          'threshold': 'BLOCK_MEDIUM_AND_ABOVE'
+        },
+        {
+          'category': 'HARM_CATEGORY_HATE_SPEECH',
+          'threshold': 'BLOCK_MEDIUM_AND_ABOVE'
         }
-      });
+      ]
+    });
+  }
+
+  String _extractResponse(Map<String, dynamic> responseData) {
+    if (responseData['candidates'] != null &&
+        responseData['candidates'].isNotEmpty &&
+        responseData['candidates'][0]['content'] != null &&
+        responseData['candidates'][0]['content']['parts'] != null &&
+        responseData['candidates'][0]['content']['parts'].isNotEmpty) {
+      final text = responseData['candidates'][0]['content']['parts'][0]['text'];
+      return text ?? 'Empty response from AI';
+    }
+    return 'No valid response received';
+  }
+
+  Exception _handleErrorResponse(http.Response response) {
+    final errorBody = response.body;
+    if (response.statusCode == 400) {
+      return Exception('Invalid request: Please check your input');
+    } else if (response.statusCode == 401) {
+      return Exception('Invalid API key');
+    } else if (response.statusCode == 429) {
+      return Exception('Rate limit exceeded. Please wait a moment');
+    } else if (response.statusCode >= 500) {
+      return Exception('Server error. Please try again later');
+    }
+    return Exception('Request failed (${response.statusCode}): $errorBody');
+  }
 }
